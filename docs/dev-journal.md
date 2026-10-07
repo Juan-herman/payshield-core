@@ -19,6 +19,7 @@
 - **Síntoma:** Error `psql: error: /docker-entrypoint-initdb.d/init.sql: Permission denied` durante la inicialización de PostgreSQL, provocando `relation "accounts" does not exist`.
 - **Causa Raíz:** Permisos de archivo restrictivos en el host que impedían la lectura al UID de PostgreSQL dentro del contenedor.
 - **Remediación:** Asignación de permisos `chmod 644 db/init.sql` y purga del volumen (`docker compose down -v`) para forzar la reejecución limpia del script DDL.
+
 ### Hito 2: Simulación de Ataques y Extracción de Telemetría
 * **Fecha:** Octubre 2026
 * **Objetivo:** Ejecutar vectores de ataque controlados para auditar la resistencia de la API y comprobar la calidad de los logs para investigaciones forenses.
@@ -27,3 +28,16 @@
 1. **Robustez de Entrada:** La validación estricta de datos (Pydantic) evitó que cargas útiles con montos negativos alcanzaran la capa transaccional.
 2. **Vulnerabilidad Identificada:** Se detectó la viabilidad de enumeración de cuentas por falta de control de acceso en la consulta de saldo y ausencia de limitación de tasa (Rate Limiting).
 3. **Documentación:** Se generó el reporte formal de incidente `docs/incident-reports/IR-2026-001.md` estructurado bajo la taxonomía MITRE ATT&CK.
+
+### Hito 3: Endurecimiento Perimetral con Rate Limiting en Nginx
+* **Fecha:** Octubre 2026
+* **Objetivo:** Mitigar ataques de fuerza bruta y barridos automatizados limitando la tasa de peticiones en el reverse proxy.
+
+#### Implementación y Validación Técnica:
+1. **Configuración de Rate Limiting:**
+   - Se configuró la directiva `limit_req_zone $binary_remote_addr zone=api_limit:10m rate=5r/s`.
+   - Se estableció un buffer de ráfaga con `burst=5 nodelay` y código de estado explícito `limit_req_status 429`.
+2. **Validación de Telemetría Defensiva:**
+   - La suite de pruebas activó el descarte de tráfico a partir de la ráfaga del Vector 4.
+   - Nginx registró `limiting requests, excess: 5.030 by zone "api_limit"` y respondió con código HTTP `429 Too Many Requests`.
+   - Se comprobó que el tráfico abusivo no impacta en el microservicio interno (`payshield-api`), reduciendo la superficie de ataque y el consumo de recursos.
