@@ -41,3 +41,16 @@
    - La suite de pruebas activó el descarte de tráfico a partir de la ráfaga del Vector 4.
    - Nginx registró `limiting requests, excess: 5.030 by zone "api_limit"` y respondió con código HTTP `429 Too Many Requests`.
    - Se comprobó que el tráfico abusivo no impacta en el microservicio interno (`payshield-api`), reduciendo la superficie de ataque y el consumo de recursos.
+
+### Hito 4: Mitigación Definitiva de Enumeración mediante Autenticación
+* **Fecha:** Octubre 2026
+* **Objetivo:** Remediar la fuga de información (IR-2026-001) exigiendo credenciales en los endpoints sensibles.
+
+#### Implementación y Verificación:
+1. **Control Criptográfico/Acceso:**
+   - Se integró el esquema `APIKeyHeader` (`X-API-Key`) protegiendo `/api/v1/balance/{username}` y `/api/v1/transfer`.
+   - Consultas no autenticadas son rechazadas inmediatamente con código HTTP `401 Unauthorized`.
+2. **Defensa en Profundidad Completa:**
+   - Capa 1: Nginx limita el caudal de peticiones y oculta metadatos de versión.
+   - Capa 2: FastAPI exige autenticación por cabecera y valida esquemas estrictos con Pydantic.
+   - Capa 3: PostgreSQL permanece aislado en red interna (`internal: true`) sin puertos expuestos.

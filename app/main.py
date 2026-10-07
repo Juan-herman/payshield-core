@@ -1,7 +1,8 @@
 import logging
 import os
 import psycopg2
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Security, status
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
 
 # -----------------------------------------------------------------------------
@@ -15,8 +16,20 @@ logger = logging.getLogger("payshield")
 
 app = FastAPI(title="PayShield Core API", version="1.0.0")
 
+# Esquema de autenticación interna
+API_KEY_NAME = "X-API-Key"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+VALID_API_KEY = os.getenv("INTERNAL_API_KEY", "PayShieldSecretKey2026!")
+
+def verify_api_key(api_key: str = Security(api_key_header)):
+    if not api_key or api_key != VALID_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credencial invalida o ausente"
+        )
+    return api_key
+
 def get_db_connection():
-    """Conexión a la base de datos interna aislada."""
     return psycopg2.connect(
         host=os.getenv("DB_HOST", "db"),
         database=os.getenv("POSTGRES_DB", "payshield_db"),
@@ -35,7 +48,7 @@ def health_check():
     return {"status": "operational", "service": "payshield-core"}
 
 @app.get("/api/v1/balance/{username}")
-def get_balance(username: str, request: Request):
+def get_balance(username: str, request: Request, api_key: str = Security(verify_api_key)):
     client_ip = request.headers.get("x-real-ip", request.client.host)
     extra = {"client_ip": client_ip}
 
@@ -54,7 +67,7 @@ def get_balance(username: str, request: Request):
     return {"username": username, "balance": float(row[0])}
 
 @app.post("/api/v1/transfer")
-def make_transfer(transfer: TransferRequest, request: Request):
+def make_transfer(transfer: TransferRequest, request: Request, api_key: str = Security(verify_api_key)):
     client_ip = request.headers.get("x-real-ip", request.client.host)
     extra = {"client_ip": client_ip}
 
@@ -62,7 +75,6 @@ def make_transfer(transfer: TransferRequest, request: Request):
     cursor = conn.cursor()
 
     try:
-        # Bloqueo pesimista para evitar condiciones de carrera (Double Spending)
         cursor.execute("SELECT id, balance FROM accounts WHERE username = %s FOR UPDATE;", (transfer.sender,))
         sender_data = cursor.fetchone()
 
@@ -70,7 +82,7 @@ def make_transfer(transfer: TransferRequest, request: Request):
         receiver_data = cursor.fetchone()
 
         if not sender_data or not receiver_data:
-            logger.warning(f"TRANSFERENCIA RECHAZADA: Cuentas invalidas", extra=extra)
+            logger.warning("TRANSFERENCIA RECHAZADA: Cuentas invalidas", extra=extra)
             raise HTTPException(status_code=404, detail="Cuenta no encontrada")
 
         sender_id, balance = sender_data[0], float(sender_data[1])
@@ -80,7 +92,6 @@ def make_transfer(transfer: TransferRequest, request: Request):
             logger.warning(f"TRANSFERENCIA RECHAZADA: Fondos insuficientes en '{transfer.sender}'", extra=extra)
             raise HTTPException(status_code=400, detail="Fondos insuficientes")
 
-        # Operaciones atómicas
         cursor.execute("UPDATE accounts SET balance = balance - %s WHERE id = %s;", (transfer.amount, sender_id))
         cursor.execute("UPDATE accounts SET balance = balance + %s WHERE id = %s;", (transfer.amount, receiver_id))
 
