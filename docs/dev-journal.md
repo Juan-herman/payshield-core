@@ -19,3 +19,11 @@
 - **Síntoma:** Error `psql: error: /docker-entrypoint-initdb.d/init.sql: Permission denied` durante la inicialización de PostgreSQL, provocando `relation "accounts" does not exist`.
 - **Causa Raíz:** Permisos de archivo restrictivos en el host que impedían la lectura al UID de PostgreSQL dentro del contenedor.
 - **Remediación:** Asignación de permisos `chmod 644 db/init.sql` y purga del volumen (`docker compose down -v`) para forzar la reejecución limpia del script DDL.
+### Hito 2: Simulación de Ataques y Extracción de Telemetría
+* **Fecha:** Octubre 2026
+* **Objetivo:** Ejecutar vectores de ataque controlados para auditar la resistencia de la API y comprobar la calidad de los logs para investigaciones forenses.
+
+#### Conclusiones Técnicas:
+1. **Robustez de Entrada:** La validación estricta de datos (Pydantic) evitó que cargas útiles con montos negativos alcanzaran la capa transaccional.
+2. **Vulnerabilidad Identificada:** Se detectó la viabilidad de enumeración de cuentas por falta de control de acceso en la consulta de saldo y ausencia de limitación de tasa (Rate Limiting).
+3. **Documentación:** Se generó el reporte formal de incidente `docs/incident-reports/IR-2026-001.md` estructurado bajo la taxonomía MITRE ATT&CK.
