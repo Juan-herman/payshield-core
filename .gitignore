@@ -1,0 +1,13 @@
+# Secretos y credenciales de entorno
+.env
+
+# Archivos de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.env
+
+# Logs locales y datos de Docker
+logs/
+*.log
+pgdata/
